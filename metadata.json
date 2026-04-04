@@ -1,0 +1,7 @@
+{
+  "name": "VoiceMind AI",
+  "description": "VoiceMind AI: voice to mind maps & documents, hands-free. 语音转思维导图、语音写文档，用声音记录想法。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
