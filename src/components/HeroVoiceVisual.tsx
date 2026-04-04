@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Mic } from 'lucide-react';
-
 const BAR_DELAYS = [0, 0.1, 0.05, 0.15, 0.08, 0.12, 0.03, 0.14, 0.07, 0.11, 0.06, 0.09];
 
 export type HeroVoiceVisualProps = {
@@ -66,17 +64,6 @@ export const HeroVoiceVisual: React.FC<HeroVoiceVisualProps> = ({
     <div className="mt-14 md:mt-16 max-w-2xl mx-auto" aria-hidden="true">
       <div className="rounded-3xl border border-zinc-200/80 bg-gradient-to-b from-white to-zinc-50/90 shadow-xl shadow-zinc-200/50 px-6 py-8 md:px-10 md:py-10">
         <div className="flex flex-col items-center gap-8">
-          <div className="relative flex items-center justify-center">
-            <motion.div
-              className="absolute inset-0 rounded-full bg-zinc-900/10"
-              animate={{ scale: [1, 1.35, 1], opacity: [0.35, 0, 0.35] }}
-              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 text-white shadow-lg">
-              <Mic size={28} strokeWidth={2} aria-hidden />
-            </div>
-          </div>
-
           <div className="flex h-12 w-full max-w-xs items-end justify-center gap-[5px] md:gap-1.5">
             {BAR_DELAYS.map((delay, i) => (
               <motion.span
