@@ -9,6 +9,7 @@ import { generateDocumentSummary, generateMindMap, refineTranscript } from './li
 import { downloadTextFile } from './lib/download';
 import { mindMapToJsonExport, mindMapToMarkdownOutline } from './lib/mindMapOutline';
 import { DocumentSummaryPanel } from './components/DocumentSummaryPanel';
+import { AgentVoiceWorkspace } from './components/AgentVoiceWorkspace';
 import { MindMapNode, HistoryItem, RecordingStatus } from './types';
 import { motion } from 'motion/react';
 import { Braces, Download, Terminal } from 'lucide-react';
@@ -72,10 +73,13 @@ type TranscriptMeta = TranscriptSubmitMeta | { source: 'auto' };
 
 type PreviewTab = 'mindmap' | 'document';
 
+type WorkspaceMode = 'create' | 'agent';
+
 export default function App({ onHome }: AppProps) {
   const { user } = useUser();
   const { locale } = useLandingLocale();
   const appT = APP_COPY[locale];
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('create');
   const [previewTab, setPreviewTab] = useState<PreviewTab>('mindmap');
   const [mindMapData, setMindMapData] = useState<MindMapNode | null>(null);
   const [documentMarkdown, setDocumentMarkdown] = useState('');
@@ -364,14 +368,49 @@ export default function App({ onHome }: AppProps) {
   };
 
   return (
-    <div className="flex h-screen w-full bg-zinc-50 overflow-hidden font-sans">
-      <HistoryPanel
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        history={history}
-        onSelectItem={handleSelectItem}
-        onDeleteItem={handleDeleteItem}
-      />
+    <div className="flex h-screen w-full bg-zinc-50 overflow-hidden font-sans relative">
+      <div
+        className="pointer-events-auto fixed top-3 left-1/2 z-[55] flex -translate-x-1/2 items-center gap-0.5 rounded-2xl border border-zinc-200/90 bg-white/95 p-1 shadow-lg shadow-zinc-900/10 backdrop-blur-md"
+        role="tablist"
+        aria-label={appT.workspaceModeAria}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={workspaceMode === 'create'}
+          onClick={() => setWorkspaceMode('create')}
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            workspaceMode === 'create'
+              ? 'bg-zinc-900 text-white shadow-md'
+              : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
+          }`}
+        >
+          {appT.workspaceModeCreate}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={workspaceMode === 'agent'}
+          onClick={() => setWorkspaceMode('agent')}
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            workspaceMode === 'agent'
+              ? 'bg-zinc-900 text-white shadow-md'
+              : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
+          }`}
+        >
+          {appT.workspaceModeAgent}
+        </button>
+      </div>
+
+      {workspaceMode === 'create' ? (
+        <HistoryPanel
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          history={history}
+          onSelectItem={handleSelectItem}
+          onDeleteItem={handleDeleteItem}
+        />
+      ) : null}
 
       <DebugLogs
         isOpen={isDebugOpen}
@@ -382,98 +421,140 @@ export default function App({ onHome }: AppProps) {
 
       <UserMenu onGoHome={() => onHome?.()} />
 
-      <motion.div
-        initial={{ x: -100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        className="w-1/3 min-w-[350px] h-full shadow-2xl z-10 relative"
-      >
-        <VoiceRecorder
-          onTranscriptComplete={handleTranscriptComplete}
-          onLiveTranscriptChange={onLiveTranscriptChange}
-          isProcessing={isProcessing}
-          onAutoGenerateChange={setAutoGenerateEnabled}
-          onStatusChange={setRecordingStatus}
-          onReset={handleReset}
-          sessionKey={sessionKey}
-          transcriptPolish={transcriptPolish}
-          onOpenHistory={() => setIsHistoryOpen(true)}
-          onNewSession={handleNewSession}
-          onHome={() => onHome?.()}
-          generateActionLabel={
-            previewTab === 'document' ? appT.generateDocumentSummary : appT.generateMindMap
-          }
-          supplementaryText={supplementaryContext}
-          onSupplementaryTextChange={setSupplementaryContext}
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="flex-1 h-full relative flex flex-col min-h-0"
-      >
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 px-4 pt-4">
-          <div
-            className="pointer-events-auto flex items-center gap-0.5 rounded-2xl border border-zinc-200/80 bg-white/85 p-1 shadow-lg shadow-zinc-900/8 backdrop-blur-md"
-            role="tablist"
-            aria-label={appT.previewTabListAria}
+      {workspaceMode === 'create' ? (
+        <>
+          <motion.div
+            initial={{ x: -100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            className="w-1/3 min-w-[350px] h-full shadow-2xl z-10 relative pt-11"
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={previewTab === 'mindmap'}
-              onClick={() => setPreviewTab('mindmap')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                previewTab === 'mindmap'
-                  ? 'bg-zinc-900 text-white shadow-md'
-                  : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
-              }`}
-            >
-              {appT.previewTabMindMap}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={previewTab === 'document'}
-              onClick={() => setPreviewTab('document')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                previewTab === 'document'
-                  ? 'bg-zinc-900 text-white shadow-md'
-                  : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
-              }`}
-            >
-              {appT.previewTabDocument}
-            </button>
-          </div>
+            <VoiceRecorder
+              onTranscriptComplete={handleTranscriptComplete}
+              onLiveTranscriptChange={onLiveTranscriptChange}
+              isProcessing={isProcessing}
+              onAutoGenerateChange={setAutoGenerateEnabled}
+              onStatusChange={setRecordingStatus}
+              onReset={handleReset}
+              sessionKey={sessionKey}
+              transcriptPolish={transcriptPolish}
+              onOpenHistory={() => setIsHistoryOpen(true)}
+              onNewSession={handleNewSession}
+              onHome={() => onHome?.()}
+              generateActionLabel={
+                previewTab === 'document' ? appT.generateDocumentSummary : appT.generateMindMap
+              }
+              supplementaryText={supplementaryContext}
+              onSupplementaryTextChange={setSupplementaryContext}
+            />
+          </motion.div>
 
-          <div className="pointer-events-auto flex items-center gap-2">
-            {previewTab === 'mindmap' && mindMapData ? (
-              <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="flex-1 h-full relative flex flex-col min-h-0 pt-11"
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 px-4 pt-4">
+              <div
+                className="pointer-events-auto flex items-center gap-0.5 rounded-2xl border border-zinc-200/80 bg-white/85 p-1 shadow-lg shadow-zinc-900/8 backdrop-blur-md"
+                role="tablist"
+                aria-label={appT.previewTabListAria}
+              >
                 <button
                   type="button"
-                  onClick={downloadMindMapOutline}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/85 text-zinc-700 shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-colors hover:bg-white hover:text-zinc-900"
-                  title={appT.exportOutlineMd}
-                  aria-label={appT.exportOutlineMd}
+                  role="tab"
+                  aria-selected={previewTab === 'mindmap'}
+                  onClick={() => setPreviewTab('mindmap')}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    previewTab === 'mindmap'
+                      ? 'bg-zinc-900 text-white shadow-md'
+                      : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
+                  }`}
                 >
-                  <Download size={18} />
+                  {appT.previewTabMindMap}
                 </button>
                 <button
                   type="button"
-                  onClick={downloadMindMapJson}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/85 text-zinc-700 shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-colors hover:bg-white hover:text-zinc-900"
-                  title={appT.exportJson}
-                  aria-label={appT.exportJson}
+                  role="tab"
+                  aria-selected={previewTab === 'document'}
+                  onClick={() => setPreviewTab('document')}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                    previewTab === 'document'
+                      ? 'bg-zinc-900 text-white shadow-md'
+                      : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
+                  }`}
                 >
-                  <Braces size={18} />
+                  {appT.previewTabDocument}
                 </button>
-              </>
-            ) : null}
+              </div>
+
+              <div className="pointer-events-auto flex items-center gap-2">
+                {previewTab === 'mindmap' && mindMapData ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={downloadMindMapOutline}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/85 text-zinc-700 shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-colors hover:bg-white hover:text-zinc-900"
+                      title={appT.exportOutlineMd}
+                      aria-label={appT.exportOutlineMd}
+                    >
+                      <Download size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadMindMapJson}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200/80 bg-white/85 text-zinc-700 shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-colors hover:bg-white hover:text-zinc-900"
+                      title={appT.exportJson}
+                      aria-label={appT.exportJson}
+                    >
+                      <Braces size={18} />
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsDebugOpen(true)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl border shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-all ${
+                    isDebugOpen
+                      ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-600'
+                      : 'border-zinc-200/80 bg-white/85 text-zinc-600 hover:bg-white hover:text-zinc-900'
+                  }`}
+                  title={appT.aiLogsTooltip}
+                  aria-label={appT.aiLogsTooltip}
+                >
+                  <Terminal size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 relative pt-14">
+              {previewTab === 'mindmap' ? (
+                <MindMap data={mindMapData} />
+              ) : (
+                <DocumentSummaryPanel
+                  value={documentMarkdown}
+                  onChange={setDocumentMarkdown}
+                  isProcessing={isProcessing}
+                />
+              )}
+            </div>
+          </motion.div>
+        </>
+      ) : (
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col pt-11">
+          <AgentVoiceWorkspace
+            sessionKey={sessionKey}
+            onNewSession={handleNewSession}
+            onHome={() => onHome?.()}
+            onAiLog={(data) =>
+              setAiLogs((prev) => [{ timestamp: Date.now(), data }, ...prev].slice(0, 10))
+            }
+          />
+          <div className="pointer-events-none absolute right-4 top-[3.25rem] z-30">
             <button
               type="button"
               onClick={() => setIsDebugOpen(true)}
-              className={`flex h-10 w-10 items-center justify-center rounded-xl border shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-all ${
+              className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-all ${
                 isDebugOpen
                   ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-600'
                   : 'border-zinc-200/80 bg-white/85 text-zinc-600 hover:bg-white hover:text-zinc-900'
@@ -485,19 +566,7 @@ export default function App({ onHome }: AppProps) {
             </button>
           </div>
         </div>
-
-        <div className="flex-1 min-h-0 relative pt-14">
-          {previewTab === 'mindmap' ? (
-            <MindMap data={mindMapData} />
-          ) : (
-            <DocumentSummaryPanel
-              value={documentMarkdown}
-              onChange={setDocumentMarkdown}
-              isProcessing={isProcessing}
-            />
-          )}
-        </div>
-      </motion.div>
+      )}
     </div>
   );
 }

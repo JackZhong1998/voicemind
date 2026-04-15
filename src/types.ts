@@ -28,3 +28,25 @@ export interface HistoryItem {
 }
 
 export type RecordingStatus = 'idle' | 'recording' | 'paused';
+
+/** 语音任务模式：对话消息 */
+export interface AgentChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: number;
+}
+
+/** 语音任务模式：执行 Agent 待办项 */
+export type AgentTodoStatus = 'pending' | 'running' | 'done' | 'error';
+
+export interface AgentTodoItem {
+  id: string;
+  title: string;
+  /** 对话 Agent 给出的执行说明（可选） */
+  detail?: string;
+  status: AgentTodoStatus;
+  /** 执行 Agent 输出的 Markdown */
+  result?: string;
+  errorMessage?: string;
+}

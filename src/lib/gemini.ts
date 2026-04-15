@@ -1,5 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import type { Content } from "@google/genai";
 import type { MindMapNode } from "../types";
+
+/** 多轮对话的一轮（供任务 Agent 使用） */
+export type AgentChatTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -329,4 +336,204 @@ Output language: match the user's text.${supBlock}`;
 
   const out = response.text?.trim() ?? "";
   return out || userText;
+}
+
+const MAX_CHAT_HISTORY_MESSAGES = 24;
+const MAX_CHAT_MESSAGE_CHARS = 8_000;
+
+function truncateChatHistory(messages: AgentChatTurn[]): AgentChatTurn[] {
+  const slice = messages.slice(-MAX_CHAT_HISTORY_MESSAGES);
+  return slice.map((m) => ({
+    ...m,
+    content:
+      m.content.length > MAX_CHAT_MESSAGE_CHARS
+        ? `${m.content.slice(0, MAX_CHAT_MESSAGE_CHARS)}…`
+        : m.content,
+  }));
+}
+
+function chatMessagesToContents(messages: AgentChatTurn[]): Content[] {
+  return truncateChatHistory(messages).map((m) => ({
+    role: m.role === "assistant" ? "model" : "user",
+    parts: [{ text: m.content }],
+  }));
+}
+
+const taskTodoDraftSchema = {
+  type: Type.OBJECT,
+  properties: {
+    id: { type: Type.STRING },
+    title: { type: Type.STRING },
+    detail: { type: Type.STRING },
+  },
+  required: ["id", "title"],
+} as const;
+
+export type ConversationAgentTodo = {
+  id: string;
+  title: string;
+  detail?: string;
+};
+
+export type RunConversationAgentResult = {
+  reply: string;
+  todos: ConversationAgentTodo[];
+};
+
+export type RunConversationAgentOptions = {
+  signal?: AbortSignal;
+  localeHint?: "zh" | "en";
+};
+
+/**
+ * 对话 Agent：多轮对话 + 输出结构化待办列表（随对话更新）。
+ */
+export async function runTaskConversationAgent(
+  messages: AgentChatTurn[],
+  options?: RunConversationAgentOptions
+): Promise<RunConversationAgentResult> {
+  const model = "gemini-3-flash-preview";
+  const lang =
+    options?.localeHint ??
+    (/[\u4e00-\u9fff]/.test(messages.at(-1)?.content ?? "") ? "zh" : "en");
+
+  const systemInstruction =
+    lang === "zh"
+      ? `你是「对话 Agent」，通过多轮对话理解用户口述的长任务与约束。
+规则：
+1) 用自然、专业的中文回复用户（放在 reply 字段），可确认理解、追问缺失信息、简要说明计划；不要把 todos 以纯列表形式重复写在 reply 里。
+2) 每次回复必须在 todos 中给出「当前最新」的任务拆解（通常 3–12 条，可随对话增删改）。每条含 id（简短稳定，如 t1、t2）、title（短标题）、detail（可选，一句可执行说明）。
+3) 不要编造用户未提及的关键事实；信息不足时在 reply 中追问，todos 可包含「澄清需求」类条目。
+4) 只输出 JSON，无 Markdown、无代码围栏。`
+      : `You are the "conversation agent" for long spoken tasks.
+Rules:
+1) reply: natural, professional English; confirm understanding, ask for missing info, outline the plan; do not duplicate the todo list as prose.
+2) todos: the latest task breakdown (usually 3–12 items, updated each turn). Each item: id (short stable, e.g. t1), title, optional detail (one-line execution hint).
+3) Do not invent key facts; if unclear, ask in reply and include clarification items in todos.
+4) Output JSON only—no markdown fences.`;
+
+  const contents = chatMessagesToContents(messages);
+  const response = await ai.models.generateContent({
+    model,
+    contents,
+    config: {
+      abortSignal: options?.signal,
+      systemInstruction,
+      temperature: 0.35,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          reply: { type: Type.STRING },
+          todos: {
+            type: Type.ARRAY,
+            items: taskTodoDraftSchema as { type: typeof Type.OBJECT },
+          },
+        },
+        required: ["reply", "todos"],
+      },
+    },
+  });
+
+  const text = response.text;
+  if (!text) throw new Error("No response from conversation agent");
+
+  let parsed: { reply?: string; todos?: unknown };
+  try {
+    parsed = JSON.parse(text) as { reply?: string; todos?: unknown };
+  } catch (e) {
+    throw new Error(
+      `Invalid JSON from conversation agent: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
+
+  const reply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+  const rawTodos = Array.isArray(parsed.todos) ? parsed.todos : [];
+  const todos: ConversationAgentTodo[] = [];
+  for (let i = 0; i < rawTodos.length; i++) {
+    const row = rawTodos[i];
+    const o = row && typeof row === "object" ? (row as Record<string, unknown>) : null;
+    if (!o) continue;
+    const idRaw = typeof o.id === "string" ? o.id.trim() : "";
+    const titleRaw = typeof o.title === "string" ? o.title.trim() : "";
+    const id = idRaw || `t${i + 1}`;
+    const title = titleRaw || `Task ${i + 1}`;
+    const detail =
+      typeof o.detail === "string" && o.detail.trim() !== ""
+        ? o.detail.trim().slice(0, 500)
+        : undefined;
+    todos.push({ id, title, detail });
+  }
+
+  return {
+    reply: reply || (lang === "zh" ? "好的，我已记录并拆解任务。" : "Got it—I captured and broke down the task."),
+    todos,
+  };
+}
+
+export type ExecuteTaskTodoOptions = {
+  signal?: AbortSignal;
+  localeHint?: "zh" | "en";
+};
+
+/**
+ * 执行 Agent：针对单条待办生成可交付结果（Markdown）。
+ */
+export async function executeTaskTodoItem(
+  params: {
+    /** 最近对话压缩摘要或原文摘录 */
+    conversationContext: string;
+    todoTitle: string;
+    todoDetail?: string;
+  },
+  options?: ExecuteTaskTodoOptions
+): Promise<string> {
+  const model = "gemini-3-flash-preview";
+  const lang =
+    options?.localeHint ??
+    (/[\u4e00-\u9fff]/.test(params.todoTitle + (params.todoDetail ?? "")) ? "zh" : "en");
+
+  const ctx = params.conversationContext.trim().slice(0, MAX_TRANSCRIPT_CHARS);
+  const systemInstruction =
+    lang === "zh"
+      ? `你是「执行 Agent」。根据对话上下文，只完成下面这一条待办事项，输出可直接使用的结果。
+要求：
+1) 只输出 Markdown 正文（可用 # / ##、列表、表格、代码块）；不要前言、不要自称模型、不要生成新的待办列表。
+2) 不要编造用户未确认的事实；若上下文不足，在文档开头用简短「待确认」小节列出缺少的信息。
+3) 不要与用户闲聊。`
+      : `You are the "execution agent". Using the conversation context, complete ONLY the single todo below.
+Rules:
+1) Output Markdown only (#/##, lists, tables, code blocks if needed). No preamble, no new todo list.
+2) Do not invent unconfirmed facts; if context is insufficient, start with a short "Open questions" section.
+3) No small talk.`;
+
+  const userBlock =
+    lang === "zh"
+      ? `【对话与任务上下文】
+${ctx}
+
+【本条待办 — 请只完成这一项】
+标题：${params.todoTitle}
+${params.todoDetail ? `说明：${params.todoDetail}` : ""}`
+      : `CONTEXT:
+${ctx}
+
+TODO (complete only this one):
+Title: ${params.todoTitle}
+${params.todoDetail ? `Detail: ${params.todoDetail}` : ""}`;
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: userBlock,
+    config: {
+      abortSignal: options?.signal,
+      systemInstruction,
+      temperature: 0.25,
+      maxOutputTokens: 8192,
+    },
+  });
+
+  const out = response.text?.trim() ?? "";
+   return out || (lang === "zh" ? "（未生成内容，请重试。）" : "(No output—please retry.)");
 }

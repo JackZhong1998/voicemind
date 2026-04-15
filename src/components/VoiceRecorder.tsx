@@ -43,6 +43,13 @@ interface VoiceRecorderProps {
   /** 大转写框下方的补充粘贴区，随生成一并写入模型 system prompt */
   supplementaryText: string;
   onSupplementaryTextChange: (value: string) => void;
+  /** 默认展示补充材料与自动更新开关 */
+  showSupplementary?: boolean;
+  showAutoGenerateToggle?: boolean;
+  showHistoryButton?: boolean;
+  /** 覆盖左上角标题与占位提示（如任务模式） */
+  titleOverride?: string;
+  transcriptPlaceholderOverride?: string;
 }
 
 function pickAudioMime(): string {
@@ -72,6 +79,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   generateActionLabel,
   supplementaryText,
   onSupplementaryTextChange,
+  showSupplementary = true,
+  showAutoGenerateToggle = true,
+  showHistoryButton = true,
+  titleOverride,
+  transcriptPlaceholderOverride,
 }) => {
   const { locale } = useLandingLocale();
   const t = APP_COPY[locale];
@@ -103,6 +115,13 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     statusRef.current = status;
     onStatusChange(status);
   }, [status, onStatusChange]);
+
+  useEffect(() => {
+    if (!showAutoGenerateToggle && isAutoGenerate) {
+      setIsAutoGenerate(false);
+      onAutoGenerateChange(false);
+    }
+  }, [showAutoGenerateToggle, isAutoGenerate, onAutoGenerateChange]);
 
   const flushRecorderSegment = useCallback((): Promise<void> => {
     const mr = mediaRecorderRef.current;
@@ -361,19 +380,21 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             </button>
           ) : null}
           <h2 className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 italic truncate">
-            {t.voiceInputTitle}
+            {titleOverride ?? t.voiceInputTitle}
           </h2>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={onOpenHistory}
-            className="p-2 rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
-            title={t.historyAria}
-            aria-label={t.historyAria}
-          >
-            <History size={18} />
-          </button>
+          {showHistoryButton ? (
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="p-2 rounded-xl text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition-colors"
+              title={t.historyAria}
+              aria-label={t.historyAria}
+            >
+              <History size={18} />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onNewSession}
@@ -409,30 +430,32 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
             </div>
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-zinc-300 italic text-sm px-4 text-center">
-              {t.transcriptPlaceholder}
+              {transcriptPlaceholderOverride ?? t.transcriptPlaceholder}
             </div>
           )}
         </div>
 
-        <div className="shrink-0 space-y-1.5 pt-1">
-          <label
-            htmlFor="voicemind-supplementary"
-            className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400"
-          >
-            {t.supplementaryLabel}
-          </label>
-          <textarea
-            id="voicemind-supplementary"
-            value={supplementaryText}
-            onChange={(e) =>
-              onSupplementaryTextChange(e.target.value.slice(0, 12_000))
-            }
-            placeholder={t.supplementaryPlaceholder}
-            rows={4}
-            className="w-full resize-y min-h-[88px] max-h-40 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2"
-            spellCheck={false}
-          />
-        </div>
+        {showSupplementary ? (
+          <div className="shrink-0 space-y-1.5 pt-1">
+            <label
+              htmlFor="voicemind-supplementary"
+              className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400"
+            >
+              {t.supplementaryLabel}
+            </label>
+            <textarea
+              id="voicemind-supplementary"
+              value={supplementaryText}
+              onChange={(e) =>
+                onSupplementaryTextChange(e.target.value.slice(0, 12_000))
+              }
+              placeholder={t.supplementaryPlaceholder}
+              rows={4}
+              className="w-full resize-y min-h-[88px] max-h-40 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2"
+              spellCheck={false}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-4 shrink-0">
@@ -496,38 +519,40 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         </div>
 
         <div className="flex items-stretch gap-2">
-          <div className="group relative shrink-0">
-            <button
-              type="button"
-              onClick={handleAutoGenerateToggle}
-              className={`h-full min-h-[52px] min-w-[52px] shrink-0 rounded-xl border px-2.5 flex items-center justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 ${
-                isAutoGenerate
-                  ? 'bg-zinc-900 border-zinc-900 text-amber-300 shadow-md shadow-zinc-900/15'
-                  : 'bg-zinc-100 border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 hover:bg-zinc-50'
-              }`}
-              aria-pressed={isAutoGenerate}
-              title={t.autoGenerateTooltip}
-              aria-label={t.autoGenerate}
-            >
-              <span
-                className={`text-[11px] font-black uppercase leading-none tracking-wide ${
-                  isAutoGenerate ? 'text-amber-200' : 'text-zinc-500 group-hover:text-zinc-700'
+          {showAutoGenerateToggle ? (
+            <div className="group relative shrink-0">
+              <button
+                type="button"
+                onClick={handleAutoGenerateToggle}
+                className={`h-full min-h-[52px] min-w-[52px] shrink-0 rounded-xl border px-2.5 flex items-center justify-center transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 ${
+                  isAutoGenerate
+                    ? 'bg-zinc-900 border-zinc-900 text-amber-300 shadow-md shadow-zinc-900/15'
+                    : 'bg-zinc-100 border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 hover:bg-zinc-50'
                 }`}
+                aria-pressed={isAutoGenerate}
+                title={t.autoGenerateTooltip}
+                aria-label={t.autoGenerate}
               >
-                {autoMark}
-              </span>
-            </button>
-            <div
-              role="tooltip"
-              className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-50 hidden w-max max-w-[min(260px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-zinc-200/90 bg-zinc-900 px-3 py-2.5 text-center text-[11px] leading-snug text-white shadow-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 sm:block group-focus-within:opacity-100"
-            >
-              {t.autoGenerateTooltip}
-              <span
-                className="absolute left-1/2 top-full -mt-px h-2 w-2 -translate-x-1/2 rotate-45 border border-zinc-200/90 border-t-0 border-l-0 bg-zinc-900"
-                aria-hidden
-              />
+                <span
+                  className={`text-[11px] font-black uppercase leading-none tracking-wide ${
+                    isAutoGenerate ? 'text-amber-200' : 'text-zinc-500 group-hover:text-zinc-700'
+                  }`}
+                >
+                  {autoMark}
+                </span>
+              </button>
+              <div
+                role="tooltip"
+                className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 z-50 hidden w-max max-w-[min(260px,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-zinc-200/90 bg-zinc-900 px-3 py-2.5 text-center text-[11px] leading-snug text-white shadow-xl opacity-0 transition-opacity duration-200 group-hover:opacity-100 sm:block group-focus-within:opacity-100"
+              >
+                {t.autoGenerateTooltip}
+                <span
+                  className="absolute left-1/2 top-full -mt-px h-2 w-2 -translate-x-1/2 rotate-45 border border-zinc-200/90 border-t-0 border-l-0 bg-zinc-900"
+                  aria-hidden
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
           <button
             type="button"
             disabled={(!transcript && !interimTranscript) || isProcessing}

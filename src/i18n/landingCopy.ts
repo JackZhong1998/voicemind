@@ -57,11 +57,11 @@ export type LandingCopy = {
 export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
   zh: {
     meta: {
-      title: 'VoiceMind AI — 语音转思维导图、语音写文档',
+      title: 'VoiceMind AI — 语音生成思维导图与文档 · 语音任务双 Agent',
       description:
-        'VoiceMind AI：语音转思维导图、语音写文档，把想法结构化呈现，全程免打字。',
+        '用语音把想法变成可编辑思维导图与正式文档；复杂长任务交给「语音任务」：对话 Agent 拆解待办，执行 Agent 逐项交付，点按即可查看结果。',
       keywords:
-        'VoiceMind,语音转思维导图,语音写文档,语音笔记,口述文档,思维导图,效率工具,AI笔记,语音优先,创始人,产品负责人',
+        'VoiceMind,语音思维导图,语音生成文档,语音任务,对话Agent,执行Agent,待办拆解,语音笔记,知识结构化,语音优先',
     },
     nav: {
       aria: '主导航',
@@ -73,49 +73,60 @@ export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
       cta: '免费开始',
     },
     hero: {
-      badge: '用声音记录想法',
-      title: '说出来，看得见',
-      subtitle: '语音转思维导图、语音写文档，全程免打字',
-      desc: '口述即可生成可编辑思维导图，也可整理成连贯正文——专注表达，少碰键盘。',
+      badge: '口述即产出',
+      title: '语音生成导图、文档与待办',
+      subtitle: '创作模式 + 语音任务模式，一套工具搞定结构化输出',
+      desc: '创作模式：把口述变成思维导图或可编辑文档。语音任务：用对话 Agent 听懂长任务、生成右侧待办列表，再由执行 Agent 逐项完成——点击即可展开交付内容。',
       ctaPrimary: '免费开始',
       ctaDemo: '观看演示',
     },
     heroVisual: {
       panelLabel: '实时语音转写',
-      footerHint: '语音 → 结构 → 正文',
+      footerHint: '导图 · 文档 · 双 Agent 任务',
       typingSegments: [
-        '用声音理清思路…',
+        '一边想一边说…',
         ' ',
-        '→ 语音转思维导图',
+        '→ 思维导图',
         ' · ',
-        '语音写文档',
+        '正式文档',
+        ' · ',
+        '待办与执行',
         ' …',
       ],
     },
     features: {
       heading: '核心功能',
-      intro: '从「想到」到「写出来」，语音贯穿全流程。',
+      intro: '三种能力共用同一套语音工作流：少打字、快结构化、长任务也能拆得清。',
       cards: [
         {
-          title: '语音转思维导图',
-          body: '口述分支与层次，实时得到可编辑导图；头脑风暴、复习、会议一图读懂结构。',
+          title: '语音生成思维导图',
+          body: '口述主题与分支，AI 整理成层次清晰的导图，适合头脑风暴、复习提纲与会议纪要的结构化呈现。',
         },
         {
-          title: '语音写文档',
-          body: '从大纲到正文全程口述，纪要、方案、长文不必停下手打字。',
+          title: '语音生成文档',
+          body: '将口述整理为带标题与要点的正式 Markdown 文档，纪要、方案与长文可先说出来再微调。',
         },
         {
-          title: '用声音记录想法',
-          body: '以录音与口述为起点，先留住第一反应，再整理成导图或文档。',
+          title: '语音任务 · 双 Agent',
+          body: '对话 Agent 与你多轮沟通并持续更新待办；执行 Agent 针对每一条单独调用。待办固定在对话右侧，点按展开对应结果。',
         },
       ],
     },
     how: {
       heading: '使用方式',
       steps: [
-        { title: '说话或录音', body: '像平时一样口述，无需先排版。' },
-        { title: '生成导图或文档', body: '语音转写并结构化：导图或连贯正文。' },
-        { title: '编辑与沉淀', body: '微调结果并保存，便于日后复用。' },
+        {
+          title: '登录并进入应用',
+          body: '顶部可在「文档与导图」与「语音任务」两种工作区之间切换。',
+        },
+        {
+          title: '创作：导图或文档',
+          body: '录音或口述后生成——右侧在思维导图与文档视图间切换，可导出大纲或继续编辑正文。',
+        },
+        {
+          title: '语音任务：说清目标',
+          body: '在中间对话区用语音下达长任务；右侧待办由对话 Agent 维护，点开某项即触发执行 Agent 产出详细结果。',
+        },
       ],
     },
     pricing: {
@@ -128,13 +139,13 @@ export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
       name: 'Jack Zhong',
       role: 'VoiceMind AI 创建者 · 互联网公司产品经理',
       bio:
-        '常驻中国香港，从事互联网产品工作。长期关注「语音优先」与知识结构化，希望减少键盘打断心流的时间，把口述与灵感更快变成可编辑的思维导图与文档。VoiceMind AI 由个人运营维护，结合大模型整理与结构化能力，面向需要快速产出纪要、大纲与笔记的用户。联系：carneyzz@foxmail.com。',
+        '常驻中国香港，从事互联网产品工作。长期关注「语音优先」与知识结构化，希望减少键盘打断心流的时间，把口述更快变成导图、文档，以及可执行的待办与交付。VoiceMind AI 由个人运营维护，结合大模型整理与双 Agent 协作，面向需要快速产出纪要、大纲与复杂任务拆解的用户。联系：carneyzz@foxmail.com。',
       tdk: {
-        title: 'Jack Zhong | VoiceMind AI 创建者 · 香港 · 语音转思维导图',
+        title: 'Jack Zhong | VoiceMind AI 创建者 · 香港 · 语音导图 · 语音文档 · 双 Agent',
         description:
-          'Jack Zhong：互联网公司产品经理，于中国香港个人运营 VoiceMind AI，专注语音转思维导图、语音写文档与效率工具方向。',
+          'Jack Zhong：互联网公司产品经理，于中国香港个人运营 VoiceMind AI，专注语音生成思维导图与文档、语音任务双 Agent 与效率工具方向。',
         keywords:
-          'Jack Zhong,VoiceMind AI,香港,产品经理,语音思维导图,语音文档,个人开发者,语音优先',
+          'Jack Zhong,VoiceMind AI,香港,产品经理,语音思维导图,语音文档,AI Agent,个人开发者,语音优先',
       },
     },
     footer: {
@@ -147,16 +158,16 @@ export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
     legalLayout: {
       backHome: '← 返回首页',
       lastUpdatedLabel: '最近更新',
-      lastUpdatedOn: '2026年4月4日',
+      lastUpdatedOn: '2026年4月16日',
     },
   },
   en: {
     meta: {
-      title: 'VoiceMind AI — Voice Mind Maps & Documents',
+      title: 'VoiceMind AI — Voice Mind Maps, Documents & Dual-Agent Tasks',
       description:
-        'VoiceMind AI turns speech into editable mind maps and long-form documents—capture ideas hands-free, structured by AI.',
+        'Speak to generate editable mind maps and polished documents. Voice Tasks mode adds a chat agent that maintains a todo list on the right—tap any item to run a worker agent and expand the deliverable.',
       keywords:
-        'VoiceMind,voice mind map,voice to document,voice notes,AI productivity,speech to outline,mind map app,voice-first,founder',
+        'VoiceMind,voice mind map,voice to document,voice tasks,AI agents,todo breakdown,voice notes,productivity,voice-first',
     },
     nav: {
       aria: 'Main navigation',
@@ -168,49 +179,60 @@ export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
       cta: 'Start free',
     },
     hero: {
-      badge: 'Voice-first capture',
-      title: 'Speak it. See it.',
-      subtitle: 'Mind maps & docs—no typing',
-      desc: 'Talk through your ideas and get an editable mind map or clean prose—stay in flow, off the keyboard.',
+      badge: 'Speak to ship',
+      title: 'Voice → mind maps, docs & agent todos',
+      subtitle: 'Create mode plus Voice Tasks—one workflow, three outputs',
+      desc: 'Create mode turns speech into an editable mind map or Markdown document. Voice Tasks adds a chat agent that keeps todos on the right; a worker agent runs per item—tap to expand the full deliverable.',
       ctaPrimary: 'Start free',
       ctaDemo: 'Watch demo',
     },
     heroVisual: {
       panelLabel: 'Live voice typing',
-      footerHint: 'Voice → structure → text',
+      footerHint: 'Maps · docs · dual-agent tasks',
       typingSegments: [
-        'Capture thoughts by voice…',
+        'Think out loud…',
         ' ',
         '→ mind map',
         ' · ',
-        'outlines & documents',
+        'document',
+        ' · ',
+        'todos & execution',
         ' …',
       ],
     },
     features: {
       heading: 'Key features',
-      intro: 'From spark to structured output—voice all the way.',
+      intro: 'One voice-first flow for structure, prose, and long tasks you can actually break down.',
       cards: [
         {
-          title: 'Voice to mind map',
-          body: 'Speak branches and hierarchy—get an editable map for brainstorms, study sessions, and meetings.',
+          title: 'Voice-generated mind maps',
+          body: 'Describe themes and branches—AI shapes a clear hierarchy for brainstorms, study notes, and meeting takeaways.',
         },
         {
-          title: 'Hands-free documents',
-          body: 'Go from outline to paragraphs by voice—memos, specs, and longform without typing.',
+          title: 'Voice-generated documents',
+          body: 'Turn narration into structured Markdown with headings and bullets—draft memos and specs by talking, then edit lightly.',
         },
         {
-          title: 'Ideas on record',
-          body: 'Start with recording or dictation, then let AI shape it into maps or prose.',
+          title: 'Voice tasks · dual agents',
+          body: 'The chat agent converses and refreshes the todo list beside your thread. The worker agent runs once per todo; expand any row to read the detailed output.',
         },
       ],
     },
     how: {
       heading: 'How it works',
       steps: [
-        { title: 'Speak or record', body: 'Talk naturally—no formatting prep.' },
-        { title: 'Generate map or doc', body: 'Transcript → structured map or flowing text.' },
-        { title: 'Refine & save', body: 'Tweak results and keep them for reuse.' },
+        {
+          title: 'Open the app',
+          body: 'Use the top bar to switch between Doc & mind map mode and Voice Tasks.',
+        },
+        {
+          title: 'Create: map or document',
+          body: 'Record or dictate, then generate—toggle the preview between mind map and document, export outlines, or edit the text.',
+        },
+        {
+          title: 'Voice Tasks: describe the goal',
+          body: 'Talk through a big task in the chat column; todos stay on the right. Open an item to trigger the worker agent and view its Markdown result.',
+        },
       ],
     },
     pricing: {
@@ -223,13 +245,13 @@ export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
       name: 'Jack Zhong',
       role: 'Creator, VoiceMind AI · Product manager (internet industry)',
       bio:
-        'Based in Hong Kong SAR. I work in internet product and care about voice-first capture and knowledge structuring—turning spoken ideas into editable mind maps and documents with less typing. VoiceMind AI is a personally operated project. Contact: carneyzz@foxmail.com.',
+        'Based in Hong Kong SAR. I work in internet product and care about voice-first capture and knowledge structuring—turning speech into mind maps, documents, and actionable todos with agent-assisted execution. VoiceMind AI is a personally operated project. Contact: carneyzz@foxmail.com.',
       tdk: {
-        title: 'Jack Zhong | VoiceMind AI Creator · Hong Kong · Voice to Mind Maps',
+        title: 'Jack Zhong | VoiceMind AI · Hong Kong · Voice Maps, Docs & Dual Agents',
         description:
-          'Jack Zhong: product manager in the internet industry, operating VoiceMind AI from Hong Kong—voice to mind maps, voice documents, and productivity.',
+          'Jack Zhong: product manager operating VoiceMind AI from Hong Kong—voice mind maps, voice documents, and dual-agent voice tasks.',
         keywords:
-          'Jack Zhong,VoiceMind AI,Hong Kong,product manager,voice mind map,voice documents,indie maker,voice-first',
+          'Jack Zhong,VoiceMind AI,Hong Kong,product manager,voice mind map,voice document,AI agents,indie maker,voice-first',
       },
     },
     footer: {
@@ -242,7 +264,7 @@ export const LANDING_COPY: Record<LandingLocale, LandingCopy> = {
     legalLayout: {
       backHome: '← Back to home',
       lastUpdatedLabel: 'Last updated',
-      lastUpdatedOn: 'April 4, 2026',
+      lastUpdatedOn: 'April 16, 2026',
     },
   },
 };
