@@ -50,6 +50,8 @@ interface VoiceRecorderProps {
   /** 覆盖左上角标题与占位提示（如任务模式） */
   titleOverride?: string;
   transcriptPlaceholderOverride?: string;
+  /** 头部左侧（icon 与标题后）可插入额外导航按钮 */
+  headerLeftAddon?: React.ReactNode;
 }
 
 function pickAudioMime(): string {
@@ -84,6 +86,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   showHistoryButton = true,
   titleOverride,
   transcriptPlaceholderOverride,
+  headerLeftAddon,
 }) => {
   const { locale } = useLandingLocale();
   const t = APP_COPY[locale];
@@ -382,6 +385,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
           <h2 className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 italic truncate">
             {titleOverride ?? t.voiceInputTitle}
           </h2>
+          {headerLeftAddon}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {showHistoryButton ? (

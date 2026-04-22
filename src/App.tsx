@@ -367,41 +367,43 @@ export default function App({ onHome }: AppProps) {
     persistHistory(updatedHistory);
   };
 
+  const workspaceSwitcher = (
+    <div
+      className="ml-1 flex items-center gap-0.5 rounded-xl border border-zinc-200/90 bg-zinc-100/80 p-0.5"
+      role="tablist"
+      aria-label={appT.workspaceModeAria}
+    >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={workspaceMode === 'create'}
+        onClick={() => setWorkspaceMode('create')}
+        className={`rounded-lg px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-all ${
+          workspaceMode === 'create'
+            ? 'bg-zinc-900 text-white shadow-sm'
+            : 'text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
+        }`}
+      >
+        {appT.workspaceModeCreate}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={workspaceMode === 'agent'}
+        onClick={() => setWorkspaceMode('agent')}
+        className={`rounded-lg px-2.5 py-1 text-[11px] font-medium whitespace-nowrap transition-all ${
+          workspaceMode === 'agent'
+            ? 'bg-zinc-900 text-white shadow-sm'
+            : 'text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900'
+        }`}
+      >
+        {appT.workspaceModeAgent}
+      </button>
+    </div>
+  );
+
   return (
     <div className="flex h-screen w-full bg-zinc-50 overflow-hidden font-sans relative">
-      <div
-        className="pointer-events-auto fixed top-3 left-1/2 z-[55] flex -translate-x-1/2 items-center gap-0.5 rounded-2xl border border-zinc-200/90 bg-white/95 p-1 shadow-lg shadow-zinc-900/10 backdrop-blur-md"
-        role="tablist"
-        aria-label={appT.workspaceModeAria}
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={workspaceMode === 'create'}
-          onClick={() => setWorkspaceMode('create')}
-          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-            workspaceMode === 'create'
-              ? 'bg-zinc-900 text-white shadow-md'
-              : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
-          }`}
-        >
-          {appT.workspaceModeCreate}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={workspaceMode === 'agent'}
-          onClick={() => setWorkspaceMode('agent')}
-          className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
-            workspaceMode === 'agent'
-              ? 'bg-zinc-900 text-white shadow-md'
-              : 'text-zinc-600 hover:bg-zinc-100/80 hover:text-zinc-900'
-          }`}
-        >
-          {appT.workspaceModeAgent}
-        </button>
-      </div>
-
       {workspaceMode === 'create' ? (
         <HistoryPanel
           isOpen={isHistoryOpen}
@@ -426,7 +428,7 @@ export default function App({ onHome }: AppProps) {
           <motion.div
             initial={{ x: -100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            className="w-1/3 min-w-[350px] h-full shadow-2xl z-10 relative pt-11"
+            className="w-1/3 min-w-[350px] h-full shadow-2xl z-10 relative"
           >
             <VoiceRecorder
               onTranscriptComplete={handleTranscriptComplete}
@@ -445,6 +447,7 @@ export default function App({ onHome }: AppProps) {
               }
               supplementaryText={supplementaryContext}
               onSupplementaryTextChange={setSupplementaryContext}
+              headerLeftAddon={workspaceSwitcher}
             />
           </motion.div>
 
@@ -452,7 +455,7 @@ export default function App({ onHome }: AppProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="flex-1 h-full relative flex flex-col min-h-0 pt-11"
+            className="flex-1 h-full relative flex flex-col min-h-0"
           >
             <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 px-4 pt-4">
               <div
@@ -541,30 +544,16 @@ export default function App({ onHome }: AppProps) {
           </motion.div>
         </>
       ) : (
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col pt-11">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <AgentVoiceWorkspace
             sessionKey={sessionKey}
             onNewSession={handleNewSession}
             onHome={() => onHome?.()}
+            workspaceSwitcher={workspaceSwitcher}
             onAiLog={(data) =>
               setAiLogs((prev) => [{ timestamp: Date.now(), data }, ...prev].slice(0, 10))
             }
           />
-          <div className="pointer-events-none absolute right-4 top-[3.25rem] z-30">
-            <button
-              type="button"
-              onClick={() => setIsDebugOpen(true)}
-              className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl border shadow-lg shadow-zinc-900/8 backdrop-blur-md transition-all ${
-                isDebugOpen
-                  ? 'border-emerald-200/80 bg-emerald-50/90 text-emerald-600'
-                  : 'border-zinc-200/80 bg-white/85 text-zinc-600 hover:bg-white hover:text-zinc-900'
-              }`}
-              title={appT.aiLogsTooltip}
-              aria-label={appT.aiLogsTooltip}
-            >
-              <Terminal size={18} />
-            </button>
-          </div>
         </div>
       )}
     </div>

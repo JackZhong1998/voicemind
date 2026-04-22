@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useUser } from '@clerk/react';
 import { motion } from 'motion/react';
-import { ChevronDown, ChevronRight, ListTodo, Loader2, Sparkles } from 'lucide-react';
+import { ChevronRight, ListTodo, Loader2 } from 'lucide-react';
 import { VoiceRecorder, type TranscriptSubmitMeta } from './VoiceRecorder';
 import {
   executeTaskTodoItem,
@@ -8,9 +9,10 @@ import {
   runTaskConversationAgent,
   type ConversationAgentTodo,
 } from '../lib/gemini';
-import type { AgentChatMessage, AgentTodoItem } from '../types';
+import type { AgentChatMessage, AgentTodoItem, RecordingStatus } from '../types';
 import { useLandingLocale } from '../hooks/useLandingLocale';
 import { APP_COPY } from '../i18n/appCopy';
+import { TaskHistoryPanel, type TaskHistoryItem } from './TaskHistoryPanel';
 
 function newId(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
@@ -54,11 +56,53 @@ function buildExecutionContext(messages: AgentChatMessage[], locale: 'zh' | 'en'
     .join('\n\n');
 }
 
+function taskHistoryStorageKey(userId: string | undefined) {
+  return `voicemind_task_history_${userId ?? 'anon'}`;
+}
+
+function parseTaskHistory(raw: string): TaskHistoryItem[] {
+  try {
+    const arr = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .map((item) => {
+        const o = item && typeof item === 'object' ? (item as Record<string, unknown>) : null;
+        if (!o || typeof o.id !== 'string' || typeof o.timestamp !== 'number') return null;
+        if (typeof o.transcriptDisplay !== 'string' || typeof o.assistantReply !== 'string') return null;
+        const todos = Array.isArray(o.todos) ? (o.todos as AgentTodoItem[]) : [];
+        return {
+          id: o.id,
+          timestamp: o.timestamp,
+          transcriptRaw: typeof o.transcriptRaw === 'string' ? o.transcriptRaw : o.transcriptDisplay,
+          transcriptDisplay: o.transcriptDisplay,
+          supplementaryText: typeof o.supplementaryText === 'string' ? o.supplementaryText : '',
+          assistantReply: o.assistantReply,
+          todos,
+          audioDataUrl: typeof o.audioDataUrl === 'string' ? o.audioDataUrl : '',
+          audioMimeType: typeof o.audioMimeType === 'string' ? o.audioMimeType : 'audio/webm',
+        } satisfies TaskHistoryItem;
+      })
+      .filter((x): x is TaskHistoryItem => x != null);
+  } catch {
+    return [];
+  }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
 interface AgentVoiceWorkspaceProps {
   sessionKey: string;
   onNewSession: () => void;
   onHome?: () => void;
   onAiLog?: (data: unknown) => void;
+  workspaceSwitcher?: React.ReactNode;
 }
 
 export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
@@ -66,15 +110,22 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
   onNewSession,
   onHome,
   onAiLog,
+  workspaceSwitcher,
 }) => {
+  const { user } = useUser();
   const { locale } = useLandingLocale();
   const t = APP_COPY[locale];
   const localeHint = locale === 'en' ? 'en' : 'zh';
 
   const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const [todos, setTodos] = useState<AgentTodoItem[]>([]);
+  const [taskHistory, setTaskHistory] = useState<TaskHistoryItem[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [expandedTodoId, setExpandedTodoId] = useState<string | null>(null);
+  const [supplementaryContext, setSupplementaryContext] = useState('');
+  const [autoGenerateEnabled, setAutoGenerateEnabled] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
   const [transcriptPolish, setTranscriptPolish] = useState<{
     token: number;
     text: string;
@@ -85,21 +136,51 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
 
   const genRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const autoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoRawRef = useRef('');
 
   useEffect(() => {
-    return () => abortRef.current?.abort();
+    return () => {
+      abortRef.current?.abort();
+      if (autoDebounceRef.current) clearTimeout(autoDebounceRef.current);
+    };
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isProcessing]);
+    const raw = localStorage.getItem(taskHistoryStorageKey(user?.id));
+    if (!raw) {
+      setTaskHistory([]);
+      return;
+    }
+    setTaskHistory(parseTaskHistory(raw));
+  }, [user?.id]);
+
+  const persistTaskHistory = useCallback(
+    (items: TaskHistoryItem[]) => {
+      try {
+        localStorage.setItem(taskHistoryStorageKey(user?.id), JSON.stringify(items));
+      } catch (e) {
+        console.error('Failed to persist task history', e);
+        alert(t.storageFull);
+      }
+    },
+    [user?.id, t.storageFull]
+  );
 
   const resetLocal = useCallback(() => {
     setMessages([]);
     setTodos([]);
     setExpandedTodoId(null);
     setTranscriptPolish(null);
+    setSupplementaryContext('');
+    setAutoGenerateEnabled(false);
+    setRecordingStatus('idle');
+    setIsHistoryOpen(false);
+    lastAutoRawRef.current = '';
+    if (autoDebounceRef.current) {
+      clearTimeout(autoDebounceRef.current);
+      autoDebounceRef.current = null;
+    }
     genRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -108,6 +189,75 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
   useEffect(() => {
     resetLocal();
   }, [sessionKey, resetLocal]);
+
+  const saveTaskHistory = useCallback(
+    async (
+      transcriptRaw: string,
+      transcriptDisplay: string,
+      assistantReply: string,
+      todoItems: AgentTodoItem[],
+      audioBlob: Blob | null,
+      audioMimeType: string
+    ) => {
+      let audioDataUrl = '';
+      if (audioBlob && audioBlob.size > 0) {
+        try {
+          audioDataUrl = await blobToDataUrl(audioBlob);
+        } catch (e) {
+          console.error('task audio encode failed', e);
+        }
+      }
+      const newItem: TaskHistoryItem = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        transcriptRaw,
+        transcriptDisplay,
+        supplementaryText: supplementaryContext.trim(),
+        assistantReply,
+        todos: todoItems,
+        audioDataUrl,
+        audioMimeType: audioMimeType || audioBlob?.type || 'audio/webm',
+      };
+      setTaskHistory((prev) => {
+        const next = [newItem, ...prev].slice(0, 30);
+        persistTaskHistory(next);
+        return next;
+      });
+    },
+    [persistTaskHistory, supplementaryContext]
+  );
+
+  const handleSelectHistoryItem = useCallback((item: TaskHistoryItem) => {
+    setSupplementaryContext(item.supplementaryText);
+    setTranscriptPolish({ token: Date.now(), text: item.transcriptDisplay });
+    const userMsg: AgentChatMessage = {
+      id: newId('u'),
+      role: 'user',
+      content: item.transcriptDisplay,
+      createdAt: item.timestamp,
+    };
+    const assistantMsg: AgentChatMessage = {
+      id: newId('a'),
+      role: 'assistant',
+      content: item.assistantReply,
+      createdAt: item.timestamp + 1,
+    };
+    setMessages([userMsg, assistantMsg]);
+    setTodos(item.todos);
+    setExpandedTodoId(null);
+    setIsHistoryOpen(false);
+  }, []);
+
+  const handleDeleteHistoryItem = useCallback(
+    (id: string) => {
+      setTaskHistory((prev) => {
+        const next = prev.filter((x) => x.id !== id);
+        persistTaskHistory(next);
+        return next;
+      });
+    },
+    [persistTaskHistory]
+  );
 
   const runTodoExecution = useCallback(
     async (todo: AgentTodoItem) => {
@@ -189,10 +339,14 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
     [expandedTodoId, runTodoExecution]
   );
 
+  type TranscriptMeta = TranscriptSubmitMeta | { source: 'auto' };
+
   const handleTranscriptComplete = useCallback(
-    async (transcript: string, _meta?: TranscriptSubmitMeta) => {
+    async (transcript: string, meta?: TranscriptMeta) => {
       const raw = transcript.trim();
       if (!raw) return;
+      const source = meta?.source ?? 'manual';
+      if (source === 'auto' && raw === lastAutoRawRef.current) return;
 
       const runId = ++genRef.current;
       abortRef.current?.abort();
@@ -209,10 +363,14 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
 
         setTranscriptPolish({ token: Date.now(), text: refined });
 
+        const compositeInput = supplementaryContext.trim()
+          ? `${refined}\n\n${localeHint === 'zh' ? '【补充输入】' : '[Supplementary input]'}\n${supplementaryContext.trim()}`
+          : refined;
+
         const userMsg: AgentChatMessage = {
           id: newId('u'),
           role: 'user',
-          content: refined,
+          content: compositeInput,
           createdAt: Date.now(),
         };
 
@@ -239,8 +397,17 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
-        setTodos((prev) => mergeTodoItems(plan.todos, prev));
+        let nextTodos: AgentTodoItem[] = [];
+        setTodos((prev) => {
+          nextTodos = mergeTodoItems(plan.todos, prev);
+          return nextTodos;
+        });
         setExpandedTodoId(null);
+        if (source === 'auto') lastAutoRawRef.current = raw;
+
+        if (source === 'manual' && meta && 'audioBlob' in meta) {
+          await saveTaskHistory(raw, refined, plan.reply, nextTodos, meta.audioBlob, meta.audioMimeType);
+        }
       } catch (e: unknown) {
         const aborted =
           e instanceof DOMException
@@ -254,169 +421,189 @@ export const AgentVoiceWorkspace: React.FC<AgentVoiceWorkspaceProps> = ({
         if (runId === genRef.current) setIsProcessing(false);
       }
     },
-    [localeHint, onAiLog, t.agentPlanFailed]
+    [localeHint, onAiLog, saveTaskHistory, supplementaryContext, t.agentPlanFailed]
   );
 
+  const onLiveTranscriptChange = useCallback(
+    (fullText: string) => {
+      if (!autoGenerateEnabled || recordingStatus !== 'recording') return;
+      const text = fullText.trim();
+      if (!text) return;
+      if (autoDebounceRef.current) clearTimeout(autoDebounceRef.current);
+      autoDebounceRef.current = setTimeout(() => {
+        autoDebounceRef.current = null;
+        const latest = (
+          (window as unknown as { _currentTranscript?: string })._currentTranscript ?? text
+        ).trim();
+        if (!latest || latest === lastAutoRawRef.current) return;
+        void handleTranscriptComplete(latest, { source: 'auto' });
+      }, 550);
+    },
+    [autoGenerateEnabled, handleTranscriptComplete, recordingStatus]
+  );
+
+  const activeTodo = todos.find((x) => x.id === expandedTodoId) ?? null;
+  const latestAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant') ?? null;
+
   return (
-    <div className="flex h-full w-full min-h-0 bg-zinc-50">
+    <div className="flex h-full w-full min-h-0 bg-zinc-50 overflow-hidden">
+      <TaskHistoryPanel
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={taskHistory}
+        onSelectItem={handleSelectHistoryItem}
+        onDeleteItem={handleDeleteHistoryItem}
+      />
+
       <motion.div
-        initial={{ x: -24, opacity: 0 }}
+        initial={{ x: -80, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
-        className="flex min-w-0 flex-1 flex-col border-r border-zinc-200 bg-white"
+        className="w-1/3 min-w-[350px] h-full shadow-2xl z-10 relative"
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-100 bg-zinc-50/90 px-4 py-3">
-          <Sparkles size={18} className="text-zinc-700" aria-hidden />
-          <h2 className="text-sm font-semibold text-zinc-900">{t.agentChatTitle}</h2>
-          <span className="ml-auto font-mono text-[11px] uppercase tracking-wider text-zinc-400">
-            {t.agentConversationAgentBadge}
-          </span>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          {messages.length === 0 && !isProcessing ? (
-            <p className="mx-auto mt-12 max-w-lg text-center text-sm leading-relaxed text-zinc-400">
-              {t.agentChatEmpty}
-            </p>
-          ) : null}
-          <div className="mx-auto flex max-w-2xl flex-col gap-3">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[min(640px,92%)] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                    m.role === 'user'
-                      ? 'bg-zinc-900 text-white'
-                      : 'border border-zinc-200/80 bg-zinc-100 text-zinc-900'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap break-words">{m.content}</p>
-                </div>
-              </div>
-            ))}
-            {isProcessing ? (
-              <div className="flex justify-start">
-                <div className="inline-flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-500 shadow-sm">
-                  <Loader2 className="animate-spin" size={16} />
-                  {t.agentPlanning}
-                </div>
-              </div>
-            ) : null}
-            <div ref={bottomRef} />
-          </div>
-        </div>
-
-        <div className="h-[min(38vh,340px)] shrink-0 border-t border-zinc-200 bg-white">
-          <VoiceRecorder
-            onTranscriptComplete={handleTranscriptComplete}
-            isProcessing={isProcessing}
-            onAutoGenerateChange={() => {}}
-            onStatusChange={() => {}}
-            onReset={() => {}}
-            sessionKey={sessionKey}
-            transcriptPolish={transcriptPolish}
-            onOpenHistory={() => {}}
-            onNewSession={onNewSession}
-            onHome={onHome}
-            generateActionLabel={t.agentSendToAi}
-            supplementaryText=""
-            onSupplementaryTextChange={() => {}}
-            showSupplementary={false}
-            showAutoGenerateToggle={false}
-            showHistoryButton={false}
-            titleOverride={t.agentVoicePanelTitle}
-            transcriptPlaceholderOverride={t.agentTranscriptPlaceholder}
-          />
-        </div>
+        <VoiceRecorder
+          onTranscriptComplete={handleTranscriptComplete}
+          onLiveTranscriptChange={onLiveTranscriptChange}
+          isProcessing={isProcessing}
+          onAutoGenerateChange={setAutoGenerateEnabled}
+          onStatusChange={setRecordingStatus}
+          onReset={() => {
+            lastAutoRawRef.current = '';
+          }}
+          sessionKey={sessionKey}
+          transcriptPolish={transcriptPolish}
+          onOpenHistory={() => setIsHistoryOpen(true)}
+          onNewSession={onNewSession}
+          onHome={onHome}
+          generateActionLabel={t.agentSendToAi}
+          supplementaryText={supplementaryContext}
+          onSupplementaryTextChange={setSupplementaryContext}
+          titleOverride={t.agentVoicePanelTitle}
+          transcriptPlaceholderOverride={t.agentTranscriptPlaceholder}
+          headerLeftAddon={workspaceSwitcher}
+        />
       </motion.div>
 
-      <motion.aside
-        initial={{ x: 24, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ delay: 0.06 }}
-        className="flex h-full w-[min(100%,360px)] min-w-[260px] shrink-0 flex-col border-l border-zinc-200 bg-zinc-50"
-        aria-label={t.agentTodoPanelAria}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.12 }}
+        className="flex-1 min-w-0 min-h-0 flex flex-col bg-white"
       >
-        <div className="flex shrink-0 items-center gap-2 border-b border-zinc-200 bg-white/90 px-4 py-3">
-          <ListTodo size={18} className="text-zinc-800" aria-hidden />
+        <div className="shrink-0 flex items-center justify-between border-b border-zinc-200 bg-zinc-50/80 px-4 py-3">
           <h2 className="text-sm font-semibold text-zinc-900">{t.agentTodoTitle}</h2>
-          <span className="ml-auto font-mono text-[11px] uppercase tracking-wider text-zinc-400">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-zinc-400">
             {t.agentExecutionAgentBadge}
           </span>
         </div>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-          {todos.length === 0 ? (
-            <p className="px-1 py-8 text-center text-xs leading-relaxed text-zinc-400">
-              {t.agentTodoEmpty}
-            </p>
-          ) : (
-            todos.map((item) => {
-              const open = expandedTodoId === item.id;
-              const isRunning = item.status === 'running';
-              return (
-                <div
-                  key={item.id}
-                  className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleTodo(item)}
-                    disabled={isRunning}
-                    className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 disabled:opacity-70"
-                  >
-                    <span className="mt-0.5 shrink-0 text-zinc-400" aria-hidden>
-                      {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium leading-snug text-zinc-900">
-                        {item.title}
-                      </span>
-                      {item.detail ? (
-                        <span className="mt-0.5 block text-xs text-zinc-500">{item.detail}</span>
-                      ) : null}
-                      <span className="mt-1 block text-[11px] text-zinc-400">
-                        {item.status === 'pending'
-                          ? t.agentTodoStatusPending
-                          : item.status === 'running'
-                            ? t.agentTodoStatusRunning
-                            : item.status === 'done'
-                              ? t.agentTodoStatusDone
-                              : t.agentTodoStatusError}
-                      </span>
-                    </span>
-                    {isRunning ? (
-                      <Loader2 className="shrink-0 animate-spin text-zinc-500" size={18} />
+
+        <div className="flex-1 min-h-0 flex">
+          <aside
+            className="w-[320px] min-w-[280px] max-w-[38%] h-full border-r border-zinc-200 bg-zinc-50/60"
+            aria-label={t.agentTodoPanelAria}
+          >
+            <div className="h-full overflow-y-auto p-3 space-y-2">
+              {todos.length === 0 ? (
+                <p className="px-1 py-8 text-center text-xs leading-relaxed text-zinc-400">
+                  {isProcessing ? t.agentPlanning : t.agentTodoEmpty}
+                </p>
+              ) : (
+                todos.map((item) => {
+                  const selected = expandedTodoId === item.id;
+                  const isRunning = item.status === 'running';
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => toggleTodo(item)}
+                      disabled={isRunning}
+                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition-all ${
+                        selected
+                          ? 'border-zinc-900 bg-white shadow-sm'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      } ${isRunning ? 'opacity-80' : ''}`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 shrink-0 text-zinc-400" aria-hidden>
+                          <ChevronRight size={17} className={selected ? 'rotate-90 transition-transform' : 'transition-transform'} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium leading-snug text-zinc-900">
+                            {item.title}
+                          </span>
+                          {item.detail ? (
+                            <span className="mt-0.5 block text-xs text-zinc-500">{item.detail}</span>
+                          ) : null}
+                          <span className="mt-1 block text-[11px] text-zinc-400">
+                            {item.status === 'pending'
+                              ? t.agentTodoStatusPending
+                              : item.status === 'running'
+                                ? t.agentTodoStatusRunning
+                                : item.status === 'done'
+                                  ? t.agentTodoStatusDone
+                                  : t.agentTodoStatusError}
+                          </span>
+                        </span>
+                        {isRunning ? (
+                          <Loader2 className="shrink-0 animate-spin text-zinc-500" size={16} />
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          <section className="flex-1 min-w-0 min-h-0 bg-white">
+            <div className="h-full overflow-y-auto px-5 py-4">
+              {activeTodo ? (
+                <>
+                  <div className="mb-3 border-b border-zinc-100 pb-3">
+                    <h3 className="text-base font-semibold text-zinc-900">{activeTodo.title}</h3>
+                    {activeTodo.detail ? (
+                      <p className="mt-1 text-sm text-zinc-500">{activeTodo.detail}</p>
                     ) : null}
-                  </button>
-                  {open ? (
-                    <div className="border-t border-zinc-100 bg-zinc-50/80 px-3 py-3">
-                      {isRunning ? (
-                        <p className="flex items-center gap-2 text-xs text-zinc-500">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          {t.agentExecResultLoading}
-                        </p>
-                      ) : item.status === 'error' && item.errorMessage ? (
-                        <p className="whitespace-pre-wrap text-xs text-red-600">
-                          {item.errorMessage}
-                        </p>
-                      ) : item.result?.trim() ? (
-                        <div className="max-h-64 overflow-y-auto">
-                          <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-zinc-800">
-                            {item.result}
-                          </pre>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-zinc-500">{t.agentExecResultPlaceholder}</p>
-                      )}
-                    </div>
-                  ) : null}
+                  </div>
+                  {activeTodo.status === 'running' ? (
+                    <p className="flex items-center gap-2 text-sm text-zinc-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t.agentExecResultLoading}
+                    </p>
+                  ) : activeTodo.status === 'error' && activeTodo.errorMessage ? (
+                    <pre className="whitespace-pre-wrap break-words rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-600">
+                      {activeTodo.errorMessage}
+                    </pre>
+                  ) : activeTodo.result?.trim() ? (
+                    <pre className="whitespace-pre-wrap break-words rounded-xl border border-zinc-200 bg-zinc-50 p-4 font-sans text-sm leading-relaxed text-zinc-800">
+                      {activeTodo.result}
+                    </pre>
+                  ) : (
+                    <p className="text-sm text-zinc-500">{t.agentExecResultPlaceholder}</p>
+                  )}
+                </>
+              ) : latestAssistantMessage ? (
+                <>
+                  <div className="mb-3 border-b border-zinc-100 pb-3">
+                    <h3 className="text-base font-semibold text-zinc-900">{t.agentChatTitle}</h3>
+                    <p className="mt-1 text-xs uppercase tracking-wider text-zinc-400">
+                      {t.agentConversationAgentBadge}
+                    </p>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-words rounded-xl border border-zinc-200 bg-zinc-50 p-4 font-sans text-sm leading-relaxed text-zinc-800">
+                    {latestAssistantMessage.content}
+                  </pre>
+                </>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <p className="max-w-md text-center text-sm leading-relaxed text-zinc-400">
+                    {isProcessing ? t.agentPlanning : t.agentChatEmpty}
+                  </p>
                 </div>
-              );
-            })
-          )}
+              )}
+            </div>
+          </section>
         </div>
-      </motion.aside>
+      </motion.div>
     </div>
   );
 };
